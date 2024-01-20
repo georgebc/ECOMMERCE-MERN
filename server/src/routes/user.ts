@@ -1,5 +1,5 @@
 // import express from "express";
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
@@ -10,8 +10,6 @@ import { IUser, UserModel } from "../models/user";
 import { UserErrors } from "../common/errors";
 
 router.post("/register", async (req: Request, res: Response) => {
-
-  console.log('register')
 
   const { username, password } = req.body;
 
@@ -33,6 +31,43 @@ router.post("/register", async (req: Request, res: Response) => {
 
 });
 
+router.post("/login", async (req: Request, res: Response) => {
+  const { username, password } = req.body;
 
+  try {
+    const user: IUser = await UserModel.findOne({ username });
+
+    if (!user) {
+      return res.status(400).json({ type: UserErrors.NO_USER_FOUND });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ type: UserErrors.WRONG_CREDENTIALS });
+    }
+
+    const token = jwt.sign({ id: user._id }, "secret");
+    res.json({ token, userID: user._id });
+
+  } catch (err) {
+    res.status(500).json({ type: err });
+  }
+});
+
+export const verifyToken = (req: Request, res: Response, next: NextFunction) => {
+  
+  const authHeader = req.headers.authorization;
+
+  if (authHeader) {
+    jwt.verify(authHeader, "secret", (err: any) => {
+      if (err) {
+        return res.sendStatus(403);
+      }
+      next();
+    });
+  } else {
+    res.sendStatus(401);
+  }
+};
 
 export { router as userRouter };
